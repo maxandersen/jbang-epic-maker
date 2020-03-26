@@ -1,0 +1,14 @@
+name: 'jbang epic maker'
+description: 'Automatically maintain an issue with list of issues as an epic'
+branding:
+  icon: hash
+  color: red
+inputs:
+  args:
+      description: 'arguments to pass on to the script'
+      required: false
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.args }}
