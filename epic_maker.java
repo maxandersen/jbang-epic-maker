@@ -92,7 +92,7 @@ class epic_maker implements Callable<Integer> {
         // Prevent infinite edit loop
         if (ctx.read("sender.login").equals(botname)) {
             System.out.println("bot made last update - skipping");
-            return -1;
+            return 0;
         }
 
         var data = ctx.read("$", JsonNode.class);
@@ -261,10 +261,23 @@ class epic_maker implements Callable<Integer> {
         Matcher matcher = dataRe.matcher(body);
         if (matcher.find()) {
             //out.println("parsing " + matcher.group(1));
+            String data = matcher.group(1);
             try {
                 return new ObjectMapper(new YAMLFactory()).readValue(matcher.group(1), EpicData.class);
             } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Could not parse " + matcher.group(1), e);
+                //could not parse as yaml so parsing as block of numbers
+
+                Pattern pattern = Pattern.compile("(?s)#([0-9]+)");
+                matcher = pattern.matcher(data);
+                EpicData ed = new EpicData();
+
+                List<String> x = new ArrayList<>();
+
+                while(matcher.find()) {
+                    x.add(matcher.group(1));
+                }
+                ed.setIssues(x);
+                return ed;
             }
         }
         return null;

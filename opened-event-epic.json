@@ -4,7 +4,7 @@
     "assignee": null,
     "assignees": [],
     "author_association": "OWNER",
-    "body": "Testing epics \r\n\r\n<!-- EPIC:DATA\r\n  issues: [4,5,\"https://herewego\"]\r\n-->\r\n\r\n<!-- EPIC:START -->\r\n## Epic items\r\n(this section is auto-generated - manual edits will get lost)\r\n- [ ] [#4](https://github.com/maxandersen/githubaction-testinggrounds/issues/4) Testing create issue from jbang\r\n- [x] [#5](https://github.com/maxandersen/githubaction-testinggrounds/issues/5) Testing create issue from jbang\r\n<!-- EPIC:END -->",
+    "body": "Testing epics \r\n\r\n<!-- EPIC:DATA\r\n  #4, #5,\"https://herewego\"\n#20\r\n-->\r\n\r\n<!-- EPIC:START -->\r\n## Epic items\r\n(this section is auto-generated - manual edits will get lost)\r\n- [ ] [#4](https://github.com/maxandersen/githubaction-testinggrounds/issues/4) Testing create issue from jbang\r\n- [x] [#5](https://github.com/maxandersen/githubaction-testinggrounds/issues/5) Testing create issue from jbang\r\n<!-- EPIC:END -->",
     "closed_at": null,
     "comments": 0,
     "comments_url": "https://api.github.com/repos/maxandersen/githubaction-testinggrounds/issues/33/comments",
