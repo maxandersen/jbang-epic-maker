@@ -4,6 +4,7 @@
 //DEPS com.fasterxml.jackson.core:jackson-databind:2.2.3
 //DEPS com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.9
 //DEPS com.jayway.jsonpath:json-path:2.4.0
+//DEPS org.slf4j:slf4j-nop:1.7.28
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +25,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -32,6 +34,8 @@ import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.jayway.jsonpath.Criteria.where;
+import static com.jayway.jsonpath.Filter.filter;
 import static java.lang.System.*;
 import static picocli.CommandLine.*;
 
@@ -77,14 +81,13 @@ class epic_maker implements Callable<Integer> {
 
         GitHub github = new GitHubBuilder().withOAuthToken(githubToken).build();
 
-        var data = loadEventData();
+        DocumentContext ctx = readEventData();
+        var data = ctx.read("$", JsonNode.class);
 
-        String reponame = data.read("$.repository.name");
-        String owner = data.read("$.repository.owner.login");
+        String reponame = ctx.read("$.repository.name");
+        String owner = ctx.read("$.repository.owner.login");
 
-
-
-        String action = data.read("$.action");
+        String action = ctx.read("action");
 
         Set validActions = new HashSet() {{
             add("opened");
@@ -94,40 +97,29 @@ class epic_maker implements Callable<Integer> {
 
         if (validActions.contains(action)) {
 
-            var issue = data.read("$.issue");
+            var issue = data.get("issue");
 
-            out.println("Found issue");
+            String label = "epic";
+            List matchinglabels = ctx.read("issue.labels[?(@.name=='" + label + "')].name");
 
-            if (issue != null) {
-                var labels = data.read("$.labels");
-                boolean found = false;
-                Iterator<JsonNode> iterator = labels.iterator();
-                while(iterator.hasNext()) {
-                    if (iterator.next().get("name").asText().equals("epic")) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (found) {
-                    out.println("Found epic label lets go");
-                }
+            if (!matchinglabels.isEmpty()) {
 
-                String body = issue.get("body").asText();
+                String body = ctx.read("issue.body");
 
                 EpicData epicData = getEpicData(body);
 
-                if(epicData.hasIssues()) {
+                if (epicData.hasIssues()) {
 
                     List<String> issues = epicData.getIssues();
 
                     StringBuffer bf = new StringBuffer();
-                    for(var item : issues) {
+                    for (var item : issues) {
                         try {
                             var no = Integer.parseInt(item);
 
-                            bf.append(String.format("issue%1$s : issue(number: %1$s) { ...IssueInfo  }\n",item));
+                            bf.append(String.format("issue%1$s : issue(number: %1$s) { ...IssueInfo  }\n", item));
 
-                        } catch(NumberFormatException nfe) {
+                        } catch (NumberFormatException nfe) {
                             //ignore
                         }
                     }
@@ -175,31 +167,33 @@ class epic_maker implements Callable<Integer> {
                             .build();
                     var response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-                    var issuedata = new ObjectMapper().readValue(response.body(),JsonNode.class);
+                    var issuedata = JsonPath.parse(response.body());
 
-                    body = body + "\n\n" + generateEpicTable(issuedata.get("data").get("repository"));
-
-                    //out.println(response.body());
-
-                    GHIssue is = github.getRepository(owner + "/" + reponame).getIssue(issue.get("number").asInt());
-
-                    is.setBody(body);
-
-                    out.println("Updated " + is);
+                    body = stripEpic(body) + "\n\n" + generateEpicTable(issuedata.read("data.repository"));
 
                 } else {
-                    // todo: remove table if no issues
-
+                    body = stripEpic(body);
                 }
 
+                if (noop) {
+                    System.out.println("noop - would have set body to\n" + body);
+                } else {
+                    GHIssue is = github.getRepository(owner + "/" + reponame).getIssue(issue.get("number").asInt());
+                    is.setBody(body);
+                    out.println("Updated " + is.getHtmlUrl());
+                }
 
-
+            } else {
+                System.out.println("Ignoring as issue do not have label " + label);
             }
-
         } else {
             System.out.println("skipped as action: " + action + " not one of " + validActions);
         }
         return 0;
+    }
+
+    private String stripEpic(String body) {
+        return body.replaceAll("(?m)(?s)<!-- EPIC:START -->.*?<!-- EPIC:END -->", "");
     }
 
     private void setupJson() {
@@ -224,43 +218,51 @@ class epic_maker implements Callable<Integer> {
         });
     }
 
-    private String generateEpicTable(JsonNode repository) {
+    private String generateEpicTable(Map repository) {
         StringBuffer buf = new StringBuffer();
-        Iterator<JsonNode> iterator = repository.iterator();
-        while(iterator.hasNext()) {
+        Iterator<Map> iterator = repository.values().iterator();
+        while (iterator.hasNext()) {
             var issue = iterator.next();
 
-            var title = String.format("[#%s](%s) %s", issue.get("number").asText(),
-                    issue.get("url").asText(), issue.get("title").asText() );
+            var title = String.format("[#%s](%s) %s", issue.get("number"),
+                    issue.get("url"), issue.get("title"));
 
-            var checkbox = "OPEN".equals(issue.get("state").asText()) ? "[ ]" : "[x]";
+            var checkbox = "OPEN".equals(issue.get("state")) ? "[ ]" : "[x]";
 
             buf.append("- " + checkbox + " " + title + "\n");
-
         }
 
-        return buf.toString();
+        String content = "<!-- EPICLSTART -->\n" +
+                "## Epic items\n" +
+                "(this section is auto-generated - manual edits will get lost)\n" +
+                "%s" +
+                "<!-- EPIC:END -->";
+
+        return String.format(content, buf.toString());
     }
 
 
     EpicData getEpicData(String body) {
 
-        Pattern dataRe = Pattern.compile("(?m)(?s)<!-- EPIC:DATA\\s+(.*)-->");
+        Pattern dataRe = Pattern.compile("(?m)(?s)<!-- EPIC:DATA\\s+(.*?)-->");
 
         Matcher matcher = dataRe.matcher(body);
-        if(matcher.find()) {
-            out.println("parsing " + matcher.group(1));
-
+        if (matcher.find()) {
+            //out.println("parsing " + matcher.group(1));
             try {
                 return new ObjectMapper(new YAMLFactory()).readValue(matcher.group(1), EpicData.class);
             } catch (JsonProcessingException e) {
-                e.printStackTrace();
+                throw new IllegalStateException("Could not parse " + matcher.group(1), e);
             }
         }
         return null;
     }
 
-    private DocumentContext loadEventData() throws java.io.IOException {
+    private JsonNode loadEventData() throws java.io.IOException {
+        return new ObjectMapper().readValue(githubEventpath, JsonNode.class);
+    }
+
+    private DocumentContext readEventData() throws IOException {
         return JsonPath.parse(githubEventpath);
     }
 
@@ -283,11 +285,11 @@ class epic_maker implements Callable<Integer> {
         }
 
         public boolean hasIssues() {
-            return issues.size()>0;
+            return issues.size() > 0;
         }
     }
 
-    }
+}
 
 
 
