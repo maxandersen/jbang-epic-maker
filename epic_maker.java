@@ -57,6 +57,12 @@ class epic_maker implements Callable<Integer> {
             description = "Path to read webhook event data", required = true)
     File githubEventpath;
 
+    @Option(names = {"--epiclabel"}, defaultValue = "epic", description = "Label that has to be on an issue before it is considered a epic")
+    String label;
+
+    @Option(names = {"--botname"}, defaultValue = "${BOTNAME}", required=true, description = "User name of the token used to perform updates to issue. Used to avoid infinite loops")
+    String botname;
+
 
     // @Option(names={"--config"}, defaultValue = "${CONFIG:-.github/autoissuelabeler.yml}")
     // String config;
@@ -82,6 +88,13 @@ class epic_maker implements Callable<Integer> {
         GitHub github = new GitHubBuilder().withOAuthToken(githubToken).build();
 
         DocumentContext ctx = readEventData();
+
+        // Prevent infinite edit loop
+        if (ctx.read("sender.login").equals(botname)) {
+            System.out.println("bot made last update - skipping");
+            return -1;
+        }
+
         var data = ctx.read("$", JsonNode.class);
 
         String reponame = ctx.read("$.repository.name");
@@ -99,7 +112,6 @@ class epic_maker implements Callable<Integer> {
 
             var issue = data.get("issue");
 
-            String label = "epic";
             List matchinglabels = ctx.read("issue.labels[?(@.name=='" + label + "')].name");
 
             if (!matchinglabels.isEmpty()) {
