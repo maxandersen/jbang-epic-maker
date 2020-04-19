@@ -232,7 +232,7 @@ class epic_maker implements Callable<Integer> {
             buf.append("- " + checkbox + " " + title + "\n");
         }
 
-        String content = "<!-- EPICLSTART -->\n" +
+        String content = "<!-- EPIC:START -->\n" +
                 "## Epic items\n" +
                 "(this section is auto-generated - manual edits will get lost)\n" +
                 "%s" +
