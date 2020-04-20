@@ -57,7 +57,7 @@ class epic_maker implements Callable<Integer> {
             description = "Path to read webhook event data", required = true)
     File githubEventpath;
 
-    @Option(names = {"--epiclabel"}, defaultValue = "epic", description = "Label that has to be on an issue before it is considered a epic")
+    @Option(names = {"--epiclabel"}, defaultValue = "${EPICLABEL:-epic}", description = "Label that has to be on an issue before it is considered a epic")
     String label;
 
     @Option(names = {"--botname"}, defaultValue = "${BOTNAME}", required=true, description = "User name of the token used to perform updates to issue. Used to avoid infinite loops")
@@ -285,9 +285,9 @@ class epic_maker implements Callable<Integer> {
 
     private JsonNode loadEventData() throws java.io.IOException {
         return new ObjectMapper().readValue(githubEventpath, JsonNode.class);
-    }
+                 }
 
-    private DocumentContext readEventData() throws IOException {
+    private                                                                        DocumentContext readEventData() throws IOException {
         return JsonPath.parse(githubEventpath);
     }
 
