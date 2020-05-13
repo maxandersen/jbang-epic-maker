@@ -120,7 +120,7 @@ class epic_maker implements Callable<Integer> {
 
                 EpicData epicData = getEpicData(body);
 
-                if (epicData.hasIssues()) {
+                if (epicData!=null && epicData.hasIssues()) {
 
                     List<String> issues = epicData.getIssues();
 
